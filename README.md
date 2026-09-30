@@ -1,0 +1,25 @@
+# カレンダーメーカー
+
+macOS 向けの A4 月間カレンダー作成アプリです。SwiftUI で編集し、macOS 標準の印刷ダイアログから印刷または PDF 保存できます。
+
+## ビルドと起動
+
+Xcode 26.3 以降と macOS 15 以降が必要です。リポジトリのルートで次を実行します。
+
+```sh
+zsh Scripts/build-app.sh
+open dist/CalendarMaker.app
+```
+
+`Package.swift` を Xcode で開き、Swift Package としてビルドすることもできます。
+
+## 現在の機能
+
+- 年月選択、前月・翌月移動、現在の月へ戻る
+- 月曜／日曜始まり（設定を保存）
+- 先月・先々月の小さなカレンダーの表示切り替え
+- メインカラーからの配色生成、画像の配置
+- A4 縦 1 ページのプレビューと標準印刷ダイアログ
+- 2026・2027 年の日本の祝日・休日の表示
+
+祝日データは内閣府の[「国民の祝日」について](https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html)で確認した内容を `Sources/CalendarMaker/Resources/holidays.csv` に収録しています。収録外の年は祝日未収録と表示します。新しい年の祝日が公表されたら同 CSV に追記し、収録年判定も更新してください。
