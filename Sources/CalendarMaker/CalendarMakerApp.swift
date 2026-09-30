@@ -72,6 +72,39 @@ private struct Holidays {
     func hasCoverage(year: Int) -> Bool { (2026...2027).contains(year) && !names.isEmpty }
 }
 
+private enum TextWeight: String, CaseIterable, Identifiable {
+    case regular = "標準"
+    case medium = "中"
+    case semibold = "やや太い"
+    case bold = "太い"
+
+    var id: String { rawValue }
+    var fontWeight: Font.Weight {
+        switch self {
+        case .regular: .regular
+        case .medium: .medium
+        case .semibold: .semibold
+        case .bold: .bold
+        }
+    }
+}
+
+private struct Typography {
+    let scale: Double
+    let weight: TextWeight
+    let monthFamily: String
+    let dayFamily: String
+
+    func font(size: CGFloat, family: String) -> Font {
+        let pointSize = size * scale
+        return (family.isEmpty ? Font.system(size: pointSize) : Font.custom(family, size: pointSize))
+            .weight(weight.fontWeight)
+    }
+
+    func month(_ size: CGFloat) -> Font { font(size: size, family: monthFamily) }
+    func day(_ size: CGFloat) -> Font { font(size: size, family: dayFamily) }
+}
+
 @MainActor
 private final class EditorModel: ObservableObject {
     @Published var selectedMonth = Month()
@@ -79,6 +112,10 @@ private final class EditorModel: ObservableObject {
     @Published var showLastMonth = true
     @Published var showTwoMonthsAgo = false
     @Published var image: NSImage?
+    @Published var fontScale = 1.2
+    @Published var fontWeight: TextWeight = .semibold
+    @Published var monthFontFamily = ""
+    @Published var dayFontFamily = ""
     @Published var firstWeekday: Int {
         didSet { UserDefaults.standard.set(firstWeekday, forKey: "firstWeekday") }
     }
@@ -95,7 +132,8 @@ private final class EditorModel: ObservableObject {
             mainColor: mainColor,
             showLastMonth: showLastMonth,
             showTwoMonthsAgo: showTwoMonthsAgo,
-            image: image
+            image: image,
+            typography: typography
         ))
         view.frame = CGRect(origin: .zero, size: Layout.page)
         let info = NSPrintInfo.shared.copy() as! NSPrintInfo
@@ -111,6 +149,11 @@ private final class EditorModel: ObservableObject {
         operation.jobTitle = "カレンダー \(selectedMonth.title)"
         operation.showsPrintPanel = true
         operation.run()
+    }
+
+    var typography: Typography {
+        Typography(scale: fontScale, weight: fontWeight,
+                   monthFamily: monthFontFamily, dayFamily: dayFontFamily)
     }
 }
 
@@ -138,8 +181,11 @@ private struct CalendarPage: View {
     let showLastMonth: Bool
     let showTwoMonthsAgo: Bool
     let image: NSImage?
+    let typography: Typography
 
     private var palette: Palette { Palette(main: mainColor) }
+    private var headerHeight: CGFloat { 225 + (typography.scale - 1.2) * 180 }
+    private var gridHeight: CGFloat { 470 - (typography.scale - 1.2) * 180 }
     private var weekdays: [String] {
         firstWeekday == 2 ? ["月", "火", "水", "木", "金", "土", "日"] : ["日", "月", "火", "水", "木", "金", "土"]
     }
@@ -147,16 +193,16 @@ private struct CalendarPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            .frame(height: 112)
+                .frame(height: headerHeight)
             HStack(spacing: 0) {
                 ForEach(Array(weekdays.enumerated()), id: \.offset) { index, label in
                     Text(label)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(typography.day(12))
                         .foregroundStyle(weekdayColor(index: index))
                         .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 24)
+            .frame(height: 28)
             .background(palette.pale)
 
             let days = month.days(firstWeekday: firstWeekday)
@@ -173,18 +219,11 @@ private struct CalendarPage: View {
                     }
                 }
             }
-            .frame(height: 480)
+            .frame(height: gridHeight)
             .overlay(Rectangle().stroke(palette.border, lineWidth: 0.7))
-
-            HStack(alignment: .top, spacing: 16) {
-                if showTwoMonthsAgo { miniCalendar(month.adding(-2)) }
-                if showLastMonth { miniCalendar(month.adding(-1)) }
-                Spacer(minLength: 0)
-            }
-            .padding(.top, 14)
             Spacer(minLength: 0)
             Text("祝日: 内閣府公表データ（2026–2027年）")
-                .font(.system(size: 7))
+                .font(typography.day(7))
                 .foregroundStyle(.secondary)
         }
         .padding(Layout.margin)
@@ -194,32 +233,41 @@ private struct CalendarPage: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 18) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(String(format: "%02d", month.month))
-                    .font(.system(size: 56, weight: .thin, design: .rounded))
-                    .foregroundStyle(palette.main)
-                Text(month.title)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.black)
-                if !Holidays.shared.hasCoverage(year: month.year) {
-                    Text("この年の祝日は未収録です")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.red)
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                if showLastMonth { miniCalendar(month.adding(-1)) }
+                if showTwoMonthsAgo { miniCalendar(month.adding(-2)) }
+                Spacer(minLength: 0)
+            }
+            .frame(width: 118, height: headerHeight - 7)
+
+            ZStack(alignment: .bottomLeading) {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 401, height: headerHeight - 7)
+                        .clipped()
+                } else {
+                    palette.pale
                 }
+                LinearGradient(colors: [.clear, .black.opacity(image == nil ? 0.12 : 0.72)],
+                               startPoint: .center, endPoint: .bottom)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(month.title)
+                        .font(typography.month(27))
+                        .minimumScaleFactor(0.8)
+                        .lineLimit(1)
+                    if !Holidays.shared.hasCoverage(year: month.year) {
+                        Text("この年の祝日は未収録です")
+                            .font(typography.month(9))
+                    }
+                }
+                .foregroundStyle(image == nil ? Color.black : Color.white)
+                .padding(14)
             }
-            Spacer(minLength: 0)
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 270, height: 108)
-                    .clipped()
-            } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(palette.pale)
-                    .frame(width: 270, height: 108)
-            }
+            .frame(width: 401, height: headerHeight - 7)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
         }
     }
 
@@ -227,11 +275,11 @@ private struct CalendarPage: View {
         VStack(alignment: .leading, spacing: 2) {
             if let day {
                 Text("\(day)")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(typography.day(15))
                     .foregroundStyle(Holidays.shared.name(month: month, day: day) == nil ? weekdayColor(index: column) : .red)
                 if let holiday = Holidays.shared.name(month: month, day: day) {
                     Text(holiday)
-                        .font(.system(size: 7))
+                        .font(typography.day(8))
                         .foregroundStyle(.red)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -256,11 +304,11 @@ private struct CalendarPage: View {
         let rows = Int(ceil(Double(days.count) / 7))
         return VStack(alignment: .leading, spacing: 3) {
             Text(target.title)
-                .font(.system(size: 9, weight: .semibold))
+                .font(typography.month(9))
                 .foregroundStyle(palette.main)
             HStack(spacing: 0) {
                 ForEach(weekdays, id: \.self) { day in
-                    Text(day).frame(width: 17)
+                    Text(day).frame(width: 16.5)
                 }
             }
             ForEach(0..<rows, id: \.self) { row in
@@ -268,12 +316,12 @@ private struct CalendarPage: View {
                     ForEach(0..<7, id: \.self) { column in
                         let index = row * 7 + column
                         Text(index < days.count ? days[index].map(String.init) ?? "" : "")
-                            .frame(width: 17)
+                            .frame(width: 16.5)
                     }
                 }
             }
         }
-        .font(.system(size: 7))
+        .font(typography.day(7))
     }
 }
 
@@ -330,6 +378,32 @@ private struct EditorView: View {
                     .frame(height: 22)
                     .accessibilityLabel("推奨カラーセット")
                 }
+                Section("文字") {
+                    HStack {
+                        Slider(value: $model.fontScale, in: 1.0...1.5, step: 0.05) {
+                            Text("全体の文字サイズ")
+                        }
+                        Text("\(Int(model.fontScale * 100))%")
+                            .monospacedDigit()
+                    }
+                    Picker("全体の太さ", selection: $model.fontWeight) {
+                        ForEach(TextWeight.allCases) { weight in
+                            Text(weight.rawValue).tag(weight)
+                        }
+                    }
+                    Picker("年月のフォント", selection: $model.monthFontFamily) {
+                        Text("システム").tag("")
+                        ForEach(NSFontManager.shared.availableFontFamilies.sorted(), id: \.self) { family in
+                            Text(family).tag(family)
+                        }
+                    }
+                    Picker("カレンダー内の日付のフォント", selection: $model.dayFontFamily) {
+                        Text("システム").tag("")
+                        ForEach(NSFontManager.shared.availableFontFamilies.sorted(), id: \.self) { family in
+                            Text(family).tag(family)
+                        }
+                    }
+                }
                 Section("アイキャッチ画像") {
                     Button(model.image == nil ? "画像を選ぶ…" : "画像を変更…") { choosingImage = true }
                     if model.image != nil {
@@ -352,7 +426,8 @@ private struct EditorView: View {
                     mainColor: model.mainColor,
                     showLastMonth: model.showLastMonth,
                     showTwoMonthsAgo: model.showTwoMonthsAgo,
-                    image: model.image
+                    image: model.image,
+                    typography: model.typography
                 )
                 .shadow(color: .black.opacity(0.15), radius: 12, y: 3)
                 .padding(30)
