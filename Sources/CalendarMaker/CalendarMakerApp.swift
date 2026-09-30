@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 private enum Layout {
     static let page = CGSize(width: 595.28, height: 841.89) // A4 at 72 dpi
-    static let margin: CGFloat = 30
+    static let margin: CGFloat = 12
 }
 
 private struct Month: Equatable {
@@ -108,7 +108,7 @@ private struct Typography {
 @MainActor
 private final class EditorModel: ObservableObject {
     @Published var selectedMonth = Month()
-    @Published var mainColor = Color(red: 0.18, green: 0.40, blue: 0.62)
+    @Published var mainColor = Color(red: 0.35, green: 0.08, blue: 0.75)
     @Published var showLastMonth = true
     @Published var showTwoMonthsAgo = false
     @Published var image: NSImage?
@@ -122,7 +122,7 @@ private final class EditorModel: ObservableObject {
 
     init() {
         let saved = UserDefaults.standard.integer(forKey: "firstWeekday")
-        firstWeekday = saved == 1 ? 1 : 2
+        firstWeekday = saved == 2 ? 2 : 1
     }
 
     func printPage() {
@@ -161,16 +161,27 @@ private struct Palette {
     let main: Color
     let pale: Color
     let border: Color
+    let bar: Color
+    let pageBackground: Color
+    let saturday: Color
 
     init(main: Color) {
-        self.main = main
         let color = NSColor(main).usingColorSpace(.deviceRGB) ?? .systemBlue
+        self.main = Color(NSColor(calibratedHue: color.hueComponent,
+                                  saturation: max(0.55, color.saturationComponent),
+                                  brightness: min(0.55, color.brightnessComponent), alpha: 1))
         pale = Color(NSColor(calibratedHue: color.hueComponent,
                              saturation: max(0.06, color.saturationComponent * 0.20),
                              brightness: 0.96, alpha: 1))
         border = Color(NSColor(calibratedHue: color.hueComponent,
                                saturation: max(0.08, color.saturationComponent * 0.28),
                                brightness: 0.76, alpha: 1))
+        bar = Color(NSColor(calibratedHue: color.hueComponent,
+                            saturation: min(0.8, max(0.45, color.saturationComponent * 0.75)),
+                            brightness: 0.98, alpha: 1))
+        pageBackground = Color(NSColor(calibratedHue: color.hueComponent,
+                                       saturation: 0.045, brightness: 0.86, alpha: 1))
+        saturday = Color(red: 0.35, green: 0.51, blue: 0.58)
     }
 }
 
@@ -184,144 +195,165 @@ private struct CalendarPage: View {
     let typography: Typography
 
     private var palette: Palette { Palette(main: mainColor) }
-    private var headerHeight: CGFloat { 225 + (typography.scale - 1.2) * 180 }
-    private var gridHeight: CGFloat { 470 - (typography.scale - 1.2) * 180 }
     private var weekdays: [String] {
         firstWeekday == 2 ? ["月", "火", "水", "木", "金", "土", "日"] : ["日", "月", "火", "水", "木", "金", "土"]
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-                .frame(height: headerHeight)
-            HStack(spacing: 0) {
-                ForEach(Array(weekdays.enumerated()), id: \.offset) { index, label in
-                    Text(label)
-                        .font(typography.day(12))
-                        .foregroundStyle(weekdayColor(index: index))
+        VStack(spacing: 2) {
+            topStage
+            HStack(spacing: 1.5) {
+                ForEach(0..<7, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(palette.bar)
                         .frame(maxWidth: .infinity)
+                        .accessibilityLabel(weekdays[index])
                 }
             }
             .frame(height: 28)
-            .background(palette.pale)
-
-            let days = month.days(firstWeekday: firstWeekday)
-            let rows = max(5, Int(ceil(Double(days.count) / 7)))
-            VStack(spacing: 0) {
-                ForEach(0..<rows, id: \.self) { row in
-                    HStack(spacing: 0) {
-                        ForEach(0..<7, id: \.self) { column in
-                            let index = row * 7 + column
-                            dayCell(index < days.count ? days[index] : nil, column: column)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .overlay(Rectangle().stroke(palette.border, lineWidth: 0.35))
-                        }
-                    }
-                }
-            }
-            .frame(height: gridHeight)
-            .overlay(Rectangle().stroke(palette.border, lineWidth: 0.7))
-            Spacer(minLength: 0)
-            Text("祝日: 内閣府公表データ（2026–2027年）")
-                .font(typography.day(7))
-                .foregroundStyle(.secondary)
+            calendarGrid
         }
-        .padding(Layout.margin)
+        .padding(.horizontal, Layout.margin)
+        .padding(.top, 10)
         .frame(width: Layout.page.width, height: Layout.page.height)
-        .background(.white)
+        .background(palette.pageBackground)
         .environment(\.colorScheme, .light)
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
+    private var topStage: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 16) {
                 if showLastMonth { miniCalendar(month.adding(-1)) }
                 if showTwoMonthsAgo { miniCalendar(month.adding(-2)) }
                 Spacer(minLength: 0)
             }
-            .frame(width: 118, height: headerHeight - 7)
+            .frame(width: 165, height: 320, alignment: .top)
+            .offset(x: 10, y: 37)
 
-            ZStack(alignment: .bottomLeading) {
+            Group {
                 if let image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 401, height: headerHeight - 7)
-                        .clipped()
+                    Image(nsImage: image).resizable().scaledToFill()
                 } else {
                     palette.pale
                 }
-                LinearGradient(colors: [.clear, .black.opacity(image == nil ? 0.12 : 0.72)],
-                               startPoint: .center, endPoint: .bottom)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(month.title)
-                        .font(typography.month(27))
-                        .minimumScaleFactor(0.8)
-                        .lineLimit(1)
-                    if !Holidays.shared.hasCoverage(year: month.year) {
-                        Text("この年の祝日は未収録です")
-                            .font(typography.month(9))
+            }
+            .frame(width: 377, height: 274)
+            .clipped()
+            .offset(x: 191, y: 54)
+
+            VStack(spacing: 0) {
+                Text(String(month.year))
+                    .font(typography.month(20))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.top, 11)
+                Spacer(minLength: 0)
+                Text(String(month.month))
+                    .font(typography.month(63))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.bottom, 9)
+            }
+            .foregroundStyle(.white)
+            .frame(width: 135, height: 135)
+            .background(palette.main)
+            .offset(x: 438, y: 0)
+        }
+        .frame(width: Layout.page.width - Layout.margin * 2, height: 370, alignment: .topLeading)
+    }
+
+    private var calendarGrid: some View {
+        let slots = daySlots()
+        let rows = slots.count / 7
+        return VStack(spacing: 1.5) {
+            ForEach(0..<rows, id: \.self) { row in
+                HStack(spacing: 1.5) {
+                    ForEach(0..<7, id: \.self) { column in
+                        let slot = slots[row * 7 + column]
+                        VStack(spacing: 0) {
+                            Text(String(slot.day))
+                                .font(typography.day(19))
+                                .foregroundStyle(dayColor(slot, column: column))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .padding(.top, 12)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.white)
+                        .accessibilityLabel("\(slot.month.title) \(slot.day)日\(slot.isCurrent ? "" : "（隣月）")")
                     }
                 }
-                .foregroundStyle(image == nil ? Color.black : Color.white)
-                .padding(14)
             }
-            .frame(width: 401, height: headerHeight - 7)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .frame(height: 425)
+    }
+
+    private struct DaySlot {
+        let month: Month
+        let day: Int
+        let isCurrent: Bool
+    }
+
+    private func daySlots() -> [DaySlot] {
+        let monthDays = month.days(firstWeekday: firstWeekday)
+        let leading = monthDays.prefix(while: { $0 == nil }).count
+        let currentCount = monthDays.count - leading
+        let rows = max(5, Int(ceil(Double(monthDays.count) / 7)))
+        let previousMonth = month.adding(-1)
+        let previousCount = previousMonth.days(firstWeekday: firstWeekday).compactMap { $0 }.count
+        return (0..<(rows * 7)).map { index in
+            if index < leading {
+                return DaySlot(month: previousMonth, day: previousCount - leading + index + 1, isCurrent: false)
+            }
+            if index < leading + currentCount {
+                return DaySlot(month: month, day: index - leading + 1, isCurrent: true)
+            }
+            return DaySlot(month: month.adding(1), day: index - leading - currentCount + 1, isCurrent: false)
         }
     }
 
-    private func dayCell(_ day: Int?, column: Int) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if let day {
-                Text("\(day)")
-                    .font(typography.day(15))
-                    .foregroundStyle(Holidays.shared.name(month: month, day: day) == nil ? weekdayColor(index: column) : .red)
-                if let holiday = Holidays.shared.name(month: month, day: day) {
-                    Text(holiday)
-                        .font(typography.day(8))
-                        .foregroundStyle(.red)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 5)
-        .padding(.top, 4)
-    }
-
-    private func weekdayColor(index: Int) -> Color {
+    private func dayColor(_ slot: DaySlot, column: Int) -> Color {
+        if !slot.isCurrent { return Color(white: 0.86) }
         let sunday = firstWeekday == 1 ? 0 : 6
         let saturday = firstWeekday == 1 ? 6 : 5
-        if index == sunday { return .red }
-        if index == saturday { return .blue }
+        if column == sunday || Holidays.shared.name(month: slot.month, day: slot.day) != nil { return .red }
+        if column == saturday { return palette.saturday }
         return .black
     }
 
     private func miniCalendar(_ target: Month) -> some View {
         let days = target.days(firstWeekday: firstWeekday)
         let rows = Int(ceil(Double(days.count) / 7))
-        return VStack(alignment: .leading, spacing: 3) {
-            Text(target.title)
-                .font(typography.month(9))
-                .foregroundStyle(palette.main)
-            HStack(spacing: 0) {
-                ForEach(weekdays, id: \.self) { day in
-                    Text(day).frame(width: 16.5)
-                }
-            }
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(String(target.month))
+                .font(typography.month(11))
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity, alignment: .leading)
             ForEach(0..<rows, id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { column in
                         let index = row * 7 + column
                         Text(index < days.count ? days[index].map(String.init) ?? "" : "")
-                            .frame(width: 16.5)
+                            .foregroundStyle(weekdayColor(column: column))
+                            .frame(maxWidth: .infinity)
                     }
                 }
+                .frame(height: 16)
             }
+            Spacer(minLength: 0)
         }
-        .font(typography.day(7))
+        .font(typography.day(8))
+        .padding(8)
+        .frame(width: 165, height: 148)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 2))
+    }
+
+    private func weekdayColor(column: Int) -> Color {
+        if column == (firstWeekday == 1 ? 0 : 6) { return .red }
+        if column == (firstWeekday == 1 ? 6 : 5) { return palette.saturday }
+        return .black
     }
 }
 
@@ -419,7 +451,9 @@ private struct EditorView: View {
             .formStyle(.grouped)
             .frame(minWidth: 250, idealWidth: 290, maxWidth: 340)
 
-            ScrollView([.horizontal, .vertical]) {
+            GeometryReader { geometry in
+                let scale = max(0.1, min(1, (geometry.size.width - 40) / Layout.page.width,
+                                         (geometry.size.height - 40) / Layout.page.height))
                 CalendarPage(
                     month: model.selectedMonth,
                     firstWeekday: model.firstWeekday,
@@ -430,8 +464,10 @@ private struct EditorView: View {
                     typography: model.typography
                 )
                 .shadow(color: .black.opacity(0.15), radius: 12, y: 3)
-                .padding(30)
-                .frame(maxWidth: .infinity)
+                .scaleEffect(scale, anchor: .topLeading)
+                .frame(width: Layout.page.width * scale, height: Layout.page.height * scale,
+                       alignment: .topLeading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(Color(nsColor: .windowBackgroundColor))
         }
