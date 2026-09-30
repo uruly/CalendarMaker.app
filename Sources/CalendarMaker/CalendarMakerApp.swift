@@ -110,7 +110,7 @@ private final class EditorModel: ObservableObject {
     @Published var selectedMonth = Month()
     @Published var mainColor = Color(red: 0.35, green: 0.08, blue: 0.75)
     @Published var showLastMonth = true
-    @Published var showTwoMonthsAgo = false
+    @Published var showNextMonth = true
     @Published var image: NSImage?
     @Published var fontScale = 1.2
     @Published var fontWeight: TextWeight = .semibold
@@ -131,7 +131,7 @@ private final class EditorModel: ObservableObject {
             firstWeekday: firstWeekday,
             mainColor: mainColor,
             showLastMonth: showLastMonth,
-            showTwoMonthsAgo: showTwoMonthsAgo,
+            showNextMonth: showNextMonth,
             image: image,
             typography: typography
         ))
@@ -180,7 +180,7 @@ private struct Palette {
                             saturation: min(0.8, max(0.45, color.saturationComponent * 0.75)),
                             brightness: 0.98, alpha: 1))
         pageBackground = Color(NSColor(calibratedHue: color.hueComponent,
-                                       saturation: 0.045, brightness: 0.86, alpha: 1))
+                                       saturation: 0.035, brightness: 0.91, alpha: 1))
         saturday = Color(red: 0.35, green: 0.51, blue: 0.58)
     }
 }
@@ -190,7 +190,7 @@ private struct CalendarPage: View {
     let firstWeekday: Int
     let mainColor: Color
     let showLastMonth: Bool
-    let showTwoMonthsAgo: Bool
+    let showNextMonth: Bool
     let image: NSImage?
     let typography: Typography
 
@@ -204,10 +204,11 @@ private struct CalendarPage: View {
             topStage
             HStack(spacing: 1.5) {
                 ForEach(0..<7, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(palette.bar)
-                        .frame(maxWidth: .infinity)
-                        .accessibilityLabel(weekdays[index])
+                    Text(weekdays[index])
+                        .font(typography.day(10))
+                        .foregroundStyle(palette.main)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(palette.bar)
                 }
             }
             .frame(height: 28)
@@ -224,7 +225,7 @@ private struct CalendarPage: View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 16) {
                 if showLastMonth { miniCalendar(month.adding(-1)) }
-                if showTwoMonthsAgo { miniCalendar(month.adding(-2)) }
+                if showNextMonth { miniCalendar(month.adding(1)) }
                 Spacer(minLength: 0)
             }
             .frame(width: 165, height: 320, alignment: .top)
@@ -239,6 +240,7 @@ private struct CalendarPage: View {
             }
             .frame(width: 377, height: 274)
             .clipped()
+            .overlay(Rectangle().stroke(palette.border.opacity(0.45), lineWidth: 0.5))
             .offset(x: 191, y: 54)
 
             VStack(spacing: 0) {
@@ -256,7 +258,7 @@ private struct CalendarPage: View {
             }
             .foregroundStyle(.white)
             .frame(width: 135, height: 135)
-            .background(palette.main)
+            .background(palette.main, in: RoundedRectangle(cornerRadius: 3))
             .offset(x: 438, y: 0)
         }
         .frame(width: Layout.page.width - Layout.margin * 2, height: 370, alignment: .topLeading)
@@ -326,10 +328,18 @@ private struct CalendarPage: View {
         let days = target.days(firstWeekday: firstWeekday)
         let rows = Int(ceil(Double(days.count) / 7))
         return VStack(alignment: .leading, spacing: 2) {
-            Text(String(target.month))
+            Text("\(target.month)月")
                 .font(typography.month(11))
-                .foregroundStyle(.black)
+                .foregroundStyle(palette.main)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 0) {
+                ForEach(Array(weekdays.enumerated()), id: \.offset) { column, label in
+                    Text(label)
+                        .foregroundStyle(weekdayColor(column: column))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: 14)
             ForEach(0..<rows, id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { column in
@@ -337,17 +347,20 @@ private struct CalendarPage: View {
                         Text(index < days.count ? days[index].map(String.init) ?? "" : "")
                             .foregroundStyle(weekdayColor(column: column))
                             .frame(maxWidth: .infinity)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
-                .frame(height: 16)
+                .frame(height: 14)
             }
             Spacer(minLength: 0)
         }
-        .font(typography.day(8))
+        .font(typography.day(7.5))
         .padding(8)
-        .frame(width: 165, height: 148)
+        .frame(width: 165, height: 150)
         .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 2))
+        .clipShape(RoundedRectangle(cornerRadius: 3))
+        .overlay(RoundedRectangle(cornerRadius: 3).stroke(palette.border.opacity(0.4), lineWidth: 0.5))
     }
 
     private func weekdayColor(column: Int) -> Color {
@@ -398,7 +411,7 @@ private struct EditorView: View {
                         Text("日曜日").tag(1)
                     }
                     Toggle("先月を表示", isOn: $model.showLastMonth)
-                    Toggle("先々月を表示", isOn: $model.showTwoMonthsAgo)
+                    Toggle("翌月を表示", isOn: $model.showNextMonth)
                 }
                 Section("配色") {
                     ColorPicker("メインカラー", selection: $model.mainColor, supportsOpacity: false)
@@ -459,11 +472,10 @@ private struct EditorView: View {
                     firstWeekday: model.firstWeekday,
                     mainColor: model.mainColor,
                     showLastMonth: model.showLastMonth,
-                    showTwoMonthsAgo: model.showTwoMonthsAgo,
+                    showNextMonth: model.showNextMonth,
                     image: model.image,
                     typography: model.typography
                 )
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 3)
                 .scaleEffect(scale, anchor: .topLeading)
                 .frame(width: Layout.page.width * scale, height: Layout.page.height * scale,
                        alignment: .topLeading)
