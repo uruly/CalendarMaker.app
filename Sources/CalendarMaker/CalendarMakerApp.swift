@@ -90,16 +90,16 @@ private enum TextWeight: String, CaseIterable, Identifiable {
 }
 
 private enum CalendarTemplate: String, CaseIterable, Identifiable {
-    case classic = "クラシック"
-    case gallery = "ギャラリー"
-    case modern = "モダン"
+    case classic = "エディトリアル"
+    case gallery = "フォト"
+    case modern = "ミニマル"
 
     var id: String { rawValue }
     var description: String {
         switch self {
-        case .classic: "小さなカレンダーと写真を並べた標準デザイン"
-        case .gallery: "写真を横いっぱいに使うデザイン"
-        case .modern: "余白と大きな年月を生かしたデザイン"
+        case .classic: "写真と文字を組み合わせた誌面風レイアウト"
+        case .gallery: "横長の写真を主役にしたレイアウト"
+        case .modern: "余白と罫線を生かしたレイアウト"
         }
     }
 }
@@ -110,21 +110,25 @@ private struct Typography {
     let monthFamily: String
     let dayFamily: String
 
-    func font(size: CGFloat, family: String) -> Font {
+    func font(size: CGFloat, family: String, design: Font.Design = .default) -> Font {
         let pointSize = size * scale
-        return (family.isEmpty ? Font.system(size: pointSize) : Font.custom(family, size: pointSize))
+        return (family.isEmpty ? Font.system(size: pointSize, design: design) : Font.custom(family, size: pointSize))
             .weight(weight.fontWeight)
     }
 
-    func month(_ size: CGFloat) -> Font { font(size: size, family: monthFamily) }
-    func day(_ size: CGFloat) -> Font { font(size: size, family: dayFamily) }
+    func month(_ size: CGFloat, design: Font.Design = .default) -> Font {
+        font(size: size, family: monthFamily, design: design)
+    }
+    func day(_ size: CGFloat, design: Font.Design = .default) -> Font {
+        font(size: size, family: dayFamily, design: design)
+    }
 }
 
 @MainActor
 private final class EditorModel: ObservableObject {
     @Published var selectedMonth = Month()
     @Published var template: CalendarTemplate = .classic
-    @Published var mainColor = Color(red: 0.35, green: 0.08, blue: 0.75)
+    @Published var mainColor = Color(red: 0.16, green: 0.25, blue: 0.32)
     @Published var showLastMonth = true
     @Published var showNextMonth = true
     @Published var image: NSImage?
@@ -183,24 +187,27 @@ private struct Palette {
     let bar: Color
     let pageBackground: Color
     let saturday: Color
+    let sunday: Color
+    let ink = Color(white: 0.16)
 
     init(main: Color) {
         let color = NSColor(main).usingColorSpace(.deviceRGB) ?? .systemBlue
         self.main = Color(NSColor(calibratedHue: color.hueComponent,
-                                  saturation: max(0.55, color.saturationComponent),
-                                  brightness: min(0.55, color.brightnessComponent), alpha: 1))
+                                  saturation: max(0.28, color.saturationComponent * 0.85),
+                                  brightness: min(0.52, color.brightnessComponent), alpha: 1))
         pale = Color(NSColor(calibratedHue: color.hueComponent,
-                             saturation: max(0.06, color.saturationComponent * 0.20),
-                             brightness: 0.96, alpha: 1))
+                             saturation: max(0.035, color.saturationComponent * 0.13),
+                             brightness: 0.97, alpha: 1))
         border = Color(NSColor(calibratedHue: color.hueComponent,
-                               saturation: max(0.08, color.saturationComponent * 0.28),
-                               brightness: 0.76, alpha: 1))
+                               saturation: max(0.04, color.saturationComponent * 0.15),
+                               brightness: 0.82, alpha: 1))
         bar = Color(NSColor(calibratedHue: color.hueComponent,
-                            saturation: min(0.8, max(0.45, color.saturationComponent * 0.75)),
-                            brightness: 0.98, alpha: 1))
+                            saturation: max(0.035, color.saturationComponent * 0.10),
+                            brightness: 0.985, alpha: 1))
         pageBackground = Color(NSColor(calibratedHue: color.hueComponent,
-                                       saturation: 0.035, brightness: 0.91, alpha: 1))
-        saturday = Color(red: 0.35, green: 0.51, blue: 0.58)
+                                       saturation: 0.012, brightness: 0.995, alpha: 1))
+        saturday = Color(red: 0.36, green: 0.48, blue: 0.57)
+        sunday = Color(red: 0.66, green: 0.30, blue: 0.31)
     }
 }
 
@@ -218,26 +225,29 @@ private struct CalendarPage: View {
     private var weekdays: [String] {
         firstWeekday == 2 ? ["月", "火", "水", "木", "金", "土", "日"] : ["日", "月", "火", "水", "木", "金", "土"]
     }
+    private var monthDesign: Font.Design { template == .modern ? .rounded : .serif }
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 0) {
             topStage
-            HStack(spacing: 1.5) {
+            HStack(spacing: 0) {
                 ForEach(0..<7, id: \.self) { index in
                     Text(weekdays[index])
-                        .font(typography.day(10))
-                        .foregroundStyle(template == .modern ? .white : palette.main)
+                        .font(typography.day(9, design: .rounded))
+                        .foregroundStyle(weekdayColor(column: index))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(template == .modern ? palette.main : palette.bar)
                 }
             }
-            .frame(height: 28)
+            .frame(height: 30)
+            .background(template == .gallery ? palette.bar : .white)
+            .overlay(alignment: .top) { palette.main.frame(height: 1.5) }
+            .overlay(alignment: .bottom) { palette.border.frame(height: 0.5) }
             calendarGrid
         }
         .padding(.horizontal, Layout.margin)
         .padding(.top, 10)
         .frame(width: Layout.page.width, height: Layout.page.height)
-        .background(template == .gallery ? .white : palette.pageBackground)
+        .background(palette.pageBackground)
         .environment(\.colorScheme, .light)
     }
 
@@ -254,62 +264,70 @@ private struct CalendarPage: View {
 
     private var classicTopStage: some View {
         ZStack(alignment: .topLeading) {
-            VStack(spacing: 16) {
-                if showLastMonth { miniCalendar(month.adding(-1)) }
-                if showNextMonth { miniCalendar(month.adding(1)) }
-                Spacer(minLength: 0)
+            Text("CALENDAR  /  " + String(month.year))
+                .font(typography.month(9, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(palette.main)
+                .offset(x: 10, y: 9)
+
+            VStack(spacing: 12) {
+                if showLastMonth { miniCalendar(month.adding(-1), height: 132) }
+                if showNextMonth { miniCalendar(month.adding(1), height: 132) }
             }
-            .frame(width: 165, height: 320, alignment: .top)
-            .offset(x: 10, y: 37)
+            .frame(width: 165, height: 290, alignment: .top)
+            .offset(x: 10, y: 41)
 
-            photo(width: 377, height: 274)
-            .overlay(Rectangle().stroke(palette.border.opacity(0.45), lineWidth: 0.5))
-            .offset(x: 191, y: 54)
+            photo(width: 377, height: 304)
+                .offset(x: 194, y: 26)
 
-            VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(String(month.year))
-                    .font(typography.month(20))
+                    .font(typography.month(16, design: monthDesign))
+                    .lineLimit(1)
+                Text("\(month.month)月")
+                    .font(typography.month(43, design: monthDesign))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    .padding(.top, 11)
-                Spacer(minLength: 0)
-                Text(String(month.month))
-                    .font(typography.month(63))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .padding(.bottom, 9)
             }
-            .foregroundStyle(.white)
-            .frame(width: 135, height: 135)
-            .background(palette.main, in: RoundedRectangle(cornerRadius: 3))
-            .offset(x: 438, y: 0)
+            .foregroundStyle(palette.main)
+            .padding(.horizontal, 16)
+            .frame(height: 72)
+            .background(.white)
+            .offset(x: 210, y: 256)
         }
     }
 
     private var galleryTopStage: some View {
         ZStack(alignment: .topLeading) {
-            photo(width: 571, height: 235)
+            Text(String(month.year) + "  /  MONTHLY CALENDAR")
+                .font(typography.month(9, design: .monospaced))
+                .tracking(1.7)
+                .foregroundStyle(palette.main)
+                .offset(x: 2, y: 5)
+
+            photo(width: 571, height: 230)
+                .offset(y: 24)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(String(month.year))
-                    .font(typography.month(17))
+                    .font(typography.month(14, design: monthDesign))
                 Text("\(month.month)月")
-                    .font(typography.month(42))
+                    .font(typography.month(47, design: monthDesign))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 19)
-            .frame(width: 190, height: 100, alignment: .leading)
-            .background(palette.main)
-            .offset(x: 18, y: 123)
+            .foregroundStyle(palette.main)
+            .padding(.horizontal, 20)
+            .frame(width: 190, height: 104, alignment: .leading)
+            .background(.white)
+            .offset(x: 20, y: 150)
 
-            HStack(alignment: .top, spacing: 16) {
-                if showLastMonth { miniCalendar(month.adding(-1), height: 108) }
-                if showNextMonth { miniCalendar(month.adding(1), height: 108) }
+            HStack(alignment: .top, spacing: 14) {
+                if showLastMonth { miniCalendar(month.adding(-1), height: 96) }
+                if showNextMonth { miniCalendar(month.adding(1), height: 96) }
             }
-            .frame(width: 571, height: 108)
-            .offset(y: 250)
+            .frame(width: 571, height: 96, alignment: .trailing)
+            .offset(y: 267)
         }
     }
 
@@ -317,29 +335,30 @@ private struct CalendarPage: View {
         ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(String(month.year))
-                    .font(typography.month(21))
-                Text(String(month.month))
-                    .font(typography.month(70))
+                    .font(typography.month(14, design: .monospaced))
+                    .tracking(2)
+                Text("\(month.month)月")
+                    .font(typography.month(57, design: monthDesign))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Rectangle()
                     .fill(palette.main)
-                    .frame(height: 4)
-                    .padding(.top, 7)
+                    .frame(height: 1.5)
+                    .padding(.top, 10)
             }
             .foregroundStyle(palette.main)
             .frame(width: 165, height: 130, alignment: .topLeading)
-            .offset(x: 10, y: 6)
+            .offset(x: 10, y: 13)
 
-            VStack(spacing: 10) {
-                if showLastMonth { miniCalendar(month.adding(-1), height: 105) }
-                if showNextMonth { miniCalendar(month.adding(1), height: 105) }
+            VStack(spacing: 11) {
+                if showLastMonth { miniCalendar(month.adding(-1), height: 100) }
+                if showNextMonth { miniCalendar(month.adding(1), height: 100) }
             }
-            .frame(width: 165, height: 220, alignment: .top)
-            .offset(x: 10, y: 140)
+            .frame(width: 165, height: 215, alignment: .top)
+            .offset(x: 10, y: 143)
 
-            photo(width: 370, height: 335)
-                .offset(x: 201, y: 14)
+            photo(width: 370, height: 324)
+                .offset(x: 201, y: 18)
         }
     }
 
@@ -358,28 +377,25 @@ private struct CalendarPage: View {
     private var calendarGrid: some View {
         let slots = daySlots()
         let rows = slots.count / 7
-        let gap: CGFloat = template == .modern ? 0.5 : 1.5
-        return VStack(spacing: gap) {
+        return VStack(spacing: 0) {
             ForEach(0..<rows, id: \.self) { row in
-                HStack(spacing: gap) {
+                HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { column in
                         let slot = slots[row * 7 + column]
-                        VStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 0) {
                             Text(String(slot.day))
-                                .font(typography.day(19))
+                                .font(typography.day(17, design: .rounded))
                                 .foregroundStyle(dayColor(slot, column: column))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.75)
-                                .padding(.top, 12)
+                                .padding(.top, 10)
+                                .padding(.leading, 10)
                             Spacer(minLength: 0)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(template == .gallery ? palette.pale : .white)
-                        .overlay {
-                            if template == .modern {
-                                Rectangle().stroke(palette.border.opacity(0.4), lineWidth: 0.5)
-                            }
-                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .background(template == .gallery && (column == 0 || column == 6) ? palette.bar : .white)
+                        .overlay(alignment: .bottom) { palette.border.opacity(0.65).frame(height: 0.5) }
+                        .overlay(alignment: .trailing) { palette.border.opacity(0.45).frame(width: 0.5) }
                         .accessibilityLabel("\(slot.month.title) \(slot.day)日\(slot.isCurrent ? "" : "（隣月）")")
                     }
                 }
@@ -413,21 +429,21 @@ private struct CalendarPage: View {
     }
 
     private func dayColor(_ slot: DaySlot, column: Int) -> Color {
-        if !slot.isCurrent { return Color(white: 0.86) }
+        if !slot.isCurrent { return Color(white: 0.70) }
         let sunday = firstWeekday == 1 ? 0 : 6
         let saturday = firstWeekday == 1 ? 6 : 5
-        if column == sunday || Holidays.shared.name(month: slot.month, day: slot.day) != nil { return .red }
+        if column == sunday || Holidays.shared.name(month: slot.month, day: slot.day) != nil { return palette.sunday }
         if column == saturday { return palette.saturday }
-        return .black
+        return palette.ink
     }
 
     private func miniCalendar(_ target: Month, height: CGFloat = 150) -> some View {
         let days = target.days(firstWeekday: firstWeekday)
         let rows = Int(ceil(Double(days.count) / 7))
-        let compact = height < 150
+        let compact = height < 125
         return VStack(alignment: .leading, spacing: compact ? 1 : 2) {
             Text("\(target.month)月")
-                .font(typography.month(compact ? 9 : 11))
+                .font(typography.month(compact ? 9 : 11, design: monthDesign))
                 .foregroundStyle(palette.main)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 0) {
@@ -453,18 +469,18 @@ private struct CalendarPage: View {
             }
             Spacer(minLength: 0)
         }
-        .font(typography.day(compact ? 6.5 : 7.5))
+        .font(typography.day(compact ? 6.5 : 7.5, design: .rounded))
         .padding(compact ? 6 : 8)
         .frame(width: 165, height: height)
         .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 3))
-        .overlay(RoundedRectangle(cornerRadius: 3).stroke(palette.border.opacity(0.4), lineWidth: 0.5))
+        .overlay(alignment: .top) { palette.main.frame(height: 1) }
+        .overlay(alignment: .bottom) { palette.border.frame(height: 0.5) }
     }
 
     private func weekdayColor(column: Int) -> Color {
-        if column == (firstWeekday == 1 ? 0 : 6) { return .red }
+        if column == (firstWeekday == 1 ? 0 : 6) { return palette.sunday }
         if column == (firstWeekday == 1 ? 6 : 5) { return palette.saturday }
-        return .black
+        return palette.ink
     }
 }
 
