@@ -516,10 +516,11 @@ private struct CalendarPage: View {
     }
 
     private func dayColor(_ slot: DaySlot, column: Int) -> Color {
+        if Holidays.shared.name(month: slot.month, day: slot.day) != nil { return palette.sunday }
         if !slot.isCurrent { return Color(white: template == .pop ? 0.60 : 0.70) }
         let sunday = firstWeekday == 1 ? 0 : 6
         let saturday = firstWeekday == 1 ? 6 : 5
-        if column == sunday || Holidays.shared.name(month: slot.month, day: slot.day) != nil { return palette.sunday }
+        if column == sunday { return palette.sunday }
         if column == saturday { return palette.saturday }
         return template == .pop ? palette.main : palette.ink
     }
@@ -565,7 +566,8 @@ private struct CalendarPage: View {
                     ForEach(0..<7, id: \.self) { column in
                         let index = row * 7 + column
                         Text(index < days.count ? days[index].map(String.init) ?? "" : "")
-                            .foregroundStyle(weekdayColor(column: column))
+                            .foregroundStyle(miniDayColor(month: target, day: index < days.count ? days[index] : nil,
+                                                          column: column))
                             .frame(maxWidth: .infinity)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -597,6 +599,11 @@ private struct CalendarPage: View {
         if column == (firstWeekday == 1 ? 0 : 6) { return palette.sunday }
         if column == (firstWeekday == 1 ? 6 : 5) { return palette.saturday }
         return palette.ink
+    }
+
+    private func miniDayColor(month: Month, day: Int?, column: Int) -> Color {
+        if let day, Holidays.shared.name(month: month, day: day) != nil { return palette.sunday }
+        return weekdayColor(column: column)
     }
 }
 
