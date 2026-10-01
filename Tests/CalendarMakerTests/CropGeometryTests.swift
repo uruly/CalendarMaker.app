@@ -50,4 +50,25 @@ final class CropGeometryTests: XCTestCase {
         XCTAssertLessThan(moved.minX, center.minX)
         XCTAssertGreaterThan(moved.minY, center.minY)
     }
+
+    func testZoomKeepsCurrentCropCenter() {
+        let image = CGSize(width: 1200, height: 800)
+        let viewport = CGSize(width: 480, height: 480 * 274 / 377)
+        let startingOffset = CGSize(width: 60, height: -40)
+        let before = CropGeometry.sourceRect(
+            imageSize: image, viewport: viewport,
+            settings: CropSettings(zoom: 1.5, offset: startingOffset)
+        )
+        let zoomedOffset = CropGeometry.offsetPreservingCenter(
+            startingOffset, imageSize: image, viewport: viewport,
+            from: 1.5, to: 2.5
+        )
+        let after = CropGeometry.sourceRect(
+            imageSize: image, viewport: viewport,
+            settings: CropSettings(zoom: 2.5, offset: zoomedOffset)
+        )
+
+        XCTAssertEqual(after.midX, before.midX, accuracy: 0.001)
+        XCTAssertEqual(after.midY, before.midY, accuracy: 0.001)
+    }
 }

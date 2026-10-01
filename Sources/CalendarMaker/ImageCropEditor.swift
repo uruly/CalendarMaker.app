@@ -16,6 +16,16 @@ enum CropGeometry {
                       height: min(max(offset.height, -maximumY), maximumY))
     }
 
+    static func offsetPreservingCenter(_ offset: CGSize, imageSize: CGSize,
+                                       viewport: CGSize, from oldZoom: CGFloat,
+                                       to newZoom: CGFloat) -> CGSize {
+        let ratio = newZoom / oldZoom
+        return clampedOffset(
+            CGSize(width: offset.width * ratio, height: offset.height * ratio),
+            imageSize: imageSize, viewport: viewport, zoom: newZoom
+        )
+    }
+
     static func sourceRect(imageSize: CGSize, viewport: CGSize,
                            settings: CropSettings) -> CGRect {
         let scale = max(viewport.width / imageSize.width, viewport.height / imageSize.height)
@@ -98,9 +108,11 @@ struct ImageCropEditor: View {
                 Slider(value: $zoom, in: 1...3, step: 0.01) {
                     Text("拡大率")
                 }
-                .onChange(of: zoom) { _, newValue in
-                    offset = CropGeometry.clampedOffset(offset, imageSize: pixelSize,
-                                                        viewport: viewport, zoom: newValue)
+                .onChange(of: zoom) { oldValue, newValue in
+                    offset = CropGeometry.offsetPreservingCenter(
+                        offset, imageSize: pixelSize, viewport: viewport,
+                        from: oldValue, to: newValue
+                    )
                 }
                 Text("拡大")
                 Text("\(Int(zoom * 100))%")
