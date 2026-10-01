@@ -134,6 +134,7 @@ private final class EditorModel: ObservableObject {
     @Published var showLastMonth = true
     @Published var showNextMonth = true
     @Published var image: NSImage?
+    @Published var printError: String?
     var originalImage: NSImage?
     var cropSettings = CropSettings()
     @Published var fontScale = 1.2
@@ -150,7 +151,7 @@ private final class EditorModel: ObservableObject {
     }
 
     func printPage() {
-        let view = NSHostingView(rootView: CalendarPage(
+        let renderer = ImageRenderer(content: CalendarPage(
             month: selectedMonth,
             template: template,
             firstWeekday: firstWeekday,
@@ -160,6 +161,14 @@ private final class EditorModel: ObservableObject {
             image: image,
             typography: typography
         ))
+        renderer.proposedSize = ProposedViewSize(Layout.page)
+        renderer.scale = 3
+        guard let pageImage = renderer.nsImage else {
+            printError = "印刷用の紙面を作成できませんでした。"
+            return
+        }
+        let view = NSImageView(image: pageImage)
+        view.imageScaling = .scaleAxesIndependently
         view.frame = CGRect(origin: .zero, size: Layout.page)
         let info = NSPrintInfo.shared.copy() as! NSPrintInfo
         info.paperSize = Layout.page
@@ -757,6 +766,11 @@ private struct EditorView: View {
             Button("OK") { imageError = nil }
         } message: {
             Text(imageError ?? "")
+        }
+        .alert("印刷エラー", isPresented: Binding(get: { model.printError != nil }, set: { if !$0 { model.printError = nil } })) {
+            Button("OK") { model.printError = nil }
+        } message: {
+            Text(model.printError ?? "")
         }
     }
 }
