@@ -112,6 +112,8 @@ private final class EditorModel: ObservableObject {
     @Published var showLastMonth = true
     @Published var showNextMonth = true
     @Published var image: NSImage?
+    var originalImage: NSImage?
+    var cropSettings = CropSettings()
     @Published var fontScale = 1.2
     @Published var fontWeight: TextWeight = .semibold
     @Published var monthFontFamily = ""
@@ -373,6 +375,9 @@ private struct CalendarPage: View {
 private struct EditorView: View {
     @ObservedObject var model: EditorModel
     @State private var choosingImage = false
+    @State private var showingImageEditor = false
+    @State private var editorSource: NSImage?
+    @State private var editorSettings = CropSettings()
     @State private var imageError: String?
 
     var body: some View {
@@ -452,7 +457,16 @@ private struct EditorView: View {
                 Section("アイキャッチ画像") {
                     Button(model.image == nil ? "画像を選ぶ…" : "画像を変更…") { choosingImage = true }
                     if model.image != nil {
-                        Button("画像を削除") { model.image = nil }
+                        Button("画像を編集…") {
+                            editorSource = model.originalImage ?? model.image
+                            editorSettings = model.cropSettings
+                            showingImageEditor = true
+                        }
+                        Button("画像を削除") {
+                            model.image = nil
+                            model.originalImage = nil
+                            model.cropSettings = CropSettings()
+                        }
                     }
                 }
                 if !Holidays.shared.hasCoverage(year: model.selectedMonth.year) {
@@ -493,9 +507,20 @@ private struct EditorView: View {
                     imageError = "画像を読み込めませんでした。"
                     return
                 }
-                model.image = image
+                editorSource = image
+                editorSettings = CropSettings()
+                DispatchQueue.main.async { showingImageEditor = true }
             } catch {
                 imageError = error.localizedDescription
+            }
+        }
+        .sheet(isPresented: $showingImageEditor) {
+            if let source = editorSource {
+                ImageCropEditor(source: source, initial: editorSettings) { cropped, settings in
+                    model.originalImage = source
+                    model.cropSettings = settings
+                    model.image = cropped
+                }
             }
         }
         .alert("画像エラー", isPresented: Binding(get: { imageError != nil }, set: { if !$0 { imageError = nil } })) {

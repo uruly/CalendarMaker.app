@@ -9,6 +9,7 @@ let package = Package(
         .executableTarget(
             name: "CalendarMaker",
             resources: [.process("Resources")]
-        )
+        ),
+        .testTarget(name: "CalendarMakerTests", dependencies: ["CalendarMaker"])
     ]
 )
