@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 private enum Layout {
     static let page = CGSize(width: 595.28, height: 841.89) // A4 at 72 dpi
-    static let margin: CGFloat = 12
+    static let margin: CGFloat = 20
 }
 
 private struct Month: Equatable {
@@ -218,7 +218,7 @@ private struct Palette {
         popAccent = Color(NSColor(calibratedHue: color.hueComponent,
                                   saturation: 0.62, brightness: 0.82, alpha: 1))
         popCard = Color(NSColor(calibratedHue: color.hueComponent,
-                                saturation: 0.12, brightness: 0.99, alpha: 1))
+                                saturation: 0.04, brightness: 0.995, alpha: 1))
         popSunday = Color(red: 1, green: 0.93, blue: 0.90)
         popSaturday = Color(red: 0.91, green: 0.96, blue: 1)
     }
@@ -269,7 +269,7 @@ private struct CalendarPage: View {
             calendarGrid
         }
         .padding(.horizontal, Layout.margin)
-        .padding(.top, 10)
+        .padding(.top, 18)
         .frame(width: Layout.page.width, height: Layout.page.height)
         .background(template == .pop ? palette.popPaper : palette.pageBackground)
         .environment(\.colorScheme, .light)
@@ -302,7 +302,7 @@ private struct CalendarPage: View {
             .frame(width: 165, height: 290, alignment: .top)
             .offset(x: 10, y: 41)
 
-            photo(width: 377, height: 304)
+            photo(width: 361, height: 304)
                 .offset(x: 194, y: 26)
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -330,7 +330,7 @@ private struct CalendarPage: View {
                 .foregroundStyle(palette.main)
                 .offset(x: 2, y: 5)
 
-            photo(width: 571, height: 230)
+            photo(width: 555, height: 230)
                 .offset(y: 24)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -351,7 +351,7 @@ private struct CalendarPage: View {
                 if showLastMonth { miniCalendar(month.adding(-1), height: 96) }
                 if showNextMonth { miniCalendar(month.adding(1), height: 96) }
             }
-            .frame(width: 571, height: 96, alignment: .trailing)
+            .frame(width: 555, height: 96, alignment: .trailing)
             .offset(y: 267)
         }
     }
@@ -382,43 +382,42 @@ private struct CalendarPage: View {
             .frame(width: 165, height: 215, alignment: .top)
             .offset(x: 10, y: 143)
 
-            photo(width: 370, height: 324)
+            photo(width: 354, height: 324)
                 .offset(x: 201, y: 18)
         }
     }
 
     private var popTopStage: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 18)
-                .fill(palette.popAccent)
-                .frame(width: 246, height: 246)
+            photo(width: 555, height: 286)
+                .clipShape(RoundedRectangle(cornerRadius: 18))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(String(month.year))
-                    .font(typography.month(18, design: .rounded))
+                    .font(typography.month(15, design: .rounded))
                 Text("\(month.month)月")
-                    .font(typography.month(65, design: .rounded))
+                    .font(typography.month(58, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                 Spacer(minLength: 0)
                 Text("MONTHLY CALENDAR")
-                    .font(typography.month(8, design: .rounded))
-                    .tracking(2)
+                    .font(typography.month(7, design: .rounded))
+                    .tracking(1.5)
             }
             .foregroundStyle(.white)
-            .padding(22)
-            .frame(width: 246, height: 246, alignment: .topLeading)
+            .padding(17)
+            .frame(width: 230, height: 153, alignment: .topLeading)
+            .background(palette.popAccent, in: RoundedRectangle(cornerRadius: 15))
+            .offset(x: 19, y: 19)
 
-            photo(width: 311, height: 246)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .offset(x: 260)
-
-            HStack(spacing: 14) {
-                if showLastMonth { miniCalendar(month.adding(-1), height: 100) }
-                if showNextMonth { miniCalendar(month.adding(1), height: 100) }
+            if showLastMonth {
+                miniCalendar(month.adding(-1), height: 103)
+                    .offset(x: 23, y: 237)
             }
-            .frame(width: 571, height: 100)
-            .offset(y: 260)
+            if showNextMonth {
+                miniCalendar(month.adding(1), height: 103)
+                    .offset(x: 382, y: 251)
+            }
         }
     }
 
@@ -445,11 +444,11 @@ private struct CalendarPage: View {
                         let slot = slots[row * 7 + column]
                         VStack(alignment: .center, spacing: 0) {
                             Text(String(slot.day))
-                                .font(typography.day(template == .pop ? 19 : 17, design: .rounded))
+                                .font(typography.day(template == .pop ? 21 : 17, design: .rounded))
                                 .foregroundStyle(dayColor(slot, column: column))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.75)
-                                .padding(.top, 10)
+                                .padding(.top, template == .pop ? 13 : 10)
                             Spacer(minLength: 0)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -466,12 +465,18 @@ private struct CalendarPage: View {
                         .overlay(alignment: .trailing) {
                             if template != .pop { palette.border.opacity(0.45).frame(width: 0.5) }
                         }
+                        .overlay {
+                            if template == .pop {
+                                RoundedRectangle(cornerRadius: 9)
+                                    .stroke(palette.popAccent.opacity(0.14), lineWidth: 0.6)
+                            }
+                        }
                         .accessibilityLabel("\(slot.month.title) \(slot.day)日\(slot.isCurrent ? "" : "（隣月）")")
                     }
                 }
             }
         }
-        .frame(height: 425)
+        .frame(height: 405)
     }
 
     private struct DaySlot {
@@ -499,7 +504,7 @@ private struct CalendarPage: View {
     }
 
     private func dayColor(_ slot: DaySlot, column: Int) -> Color {
-        if !slot.isCurrent { return Color(white: 0.70) }
+        if !slot.isCurrent { return Color(white: template == .pop ? 0.60 : 0.70) }
         let sunday = firstWeekday == 1 ? 0 : 6
         let saturday = firstWeekday == 1 ? 6 : 5
         if column == sunday || Holidays.shared.name(month: slot.month, day: slot.day) != nil { return palette.sunday }
@@ -548,8 +553,13 @@ private struct CalendarPage: View {
         .font(typography.day(compact ? 6.5 : 7.5, design: .rounded))
         .padding(compact ? 6 : 8)
         .frame(width: 165, height: height)
-        .background(template == .pop ? palette.popCard : .white,
-                    in: RoundedRectangle(cornerRadius: template == .pop ? 10 : 0))
+        .background(.white, in: RoundedRectangle(cornerRadius: template == .pop ? 10 : 0))
+        .overlay {
+            if template == .pop {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(palette.popAccent.opacity(0.25), lineWidth: 1)
+            }
+        }
         .overlay(alignment: .top) {
             if template != .pop { palette.main.frame(height: 1) }
         }
