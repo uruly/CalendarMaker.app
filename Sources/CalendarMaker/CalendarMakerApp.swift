@@ -487,12 +487,6 @@ private struct CalendarPage: View {
                                 (template == .gallery && (column == 0 || column == 6) ? palette.bar : .white)
                             }
                         }
-                        .overlay(alignment: .bottom) {
-                            if template != .pop { palette.border.opacity(0.65).frame(height: 0.5) }
-                        }
-                        .overlay(alignment: .trailing) {
-                            if template != .pop { palette.border.opacity(0.45).frame(width: 0.5) }
-                        }
                         .overlay {
                             if template == .pop {
                                 RoundedRectangle(cornerRadius: 9)
@@ -505,6 +499,26 @@ private struct CalendarPage: View {
             }
         }
         .frame(height: 405)
+        .overlay {
+            if template != .pop {
+                GeometryReader { geometry in
+                    Path { path in
+                        for column in 0...7 {
+                            let x = geometry.size.width * CGFloat(column) / 7
+                            path.move(to: CGPoint(x: x, y: 0))
+                            path.addLine(to: CGPoint(x: x, y: geometry.size.height))
+                        }
+                        for row in 0...rows {
+                            let y = geometry.size.height * CGFloat(row) / CGFloat(rows)
+                            path.move(to: CGPoint(x: 0, y: y))
+                            path.addLine(to: CGPoint(x: geometry.size.width, y: y))
+                        }
+                    }
+                    .stroke(palette.main.opacity(0.38), lineWidth: 0.9)
+                }
+                .allowsHitTesting(false)
+            }
+        }
     }
 
     private struct DaySlot {
