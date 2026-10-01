@@ -249,11 +249,14 @@ private struct CalendarPage: View {
                 ForEach(0..<7, id: \.self) { index in
                     Text(weekdays[index])
                         .font(typography.day(template == .pop ? 10 : 9, design: .rounded))
-                        .foregroundStyle(template == .pop ? .white : weekdayColor(column: index))
+                        .foregroundStyle(weekdayHeaderForeground(column: index))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background {
                             if template == .pop {
-                                RoundedRectangle(cornerRadius: 7).fill(palette.popAccent)
+                                RoundedRectangle(cornerRadius: 7)
+                                    .fill(weekdayHeaderBackground(column: index))
+                            } else {
+                                Rectangle().fill(weekdayHeaderBackground(column: index))
                             }
                         }
                 }
@@ -516,6 +519,19 @@ private struct CalendarPage: View {
         if column == (firstWeekday == 1 ? 0 : 6) { return palette.popSunday }
         if column == (firstWeekday == 1 ? 6 : 5) { return palette.popSaturday }
         return palette.popCard
+    }
+
+    private func weekdayHeaderBackground(column: Int) -> Color {
+        if column == (firstWeekday == 1 ? 0 : 6) { return palette.popSunday }
+        if column == (firstWeekday == 1 ? 6 : 5) { return palette.popSaturday }
+        if template == .pop { return palette.popAccent }
+        return template == .gallery ? palette.bar : .white
+    }
+
+    private func weekdayHeaderForeground(column: Int) -> Color {
+        if column == (firstWeekday == 1 ? 0 : 6) { return palette.sunday }
+        if column == (firstWeekday == 1 ? 6 : 5) { return palette.saturday }
+        return template == .pop ? .white : palette.ink
     }
 
     private func miniCalendar(_ target: Month, height: CGFloat = 150) -> some View {
