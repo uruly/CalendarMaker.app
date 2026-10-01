@@ -266,16 +266,19 @@ private struct CalendarPage: View {
     private var monthDesign: Font.Design {
         template == .modern || template == .pop ? .rounded : .serif
     }
+    private var calendarWidth: CGFloat { Layout.page.width - Layout.margin * 2 }
+    private var calendarSpacing: CGFloat { template == .pop ? 4 : 0 }
+    private var columnWidth: CGFloat { (calendarWidth - calendarSpacing * 6) / 7 }
 
     var body: some View {
         VStack(spacing: 0) {
             topStage
-            HStack(spacing: template == .pop ? 4 : 0) {
+            HStack(spacing: calendarSpacing) {
                 ForEach(0..<7, id: \.self) { index in
                     Text(weekdays[index])
                         .font(typography.day(template == .pop ? 10 : 9, design: .rounded))
                         .foregroundStyle(weekdayHeaderForeground(column: index))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(width: columnWidth, height: 30)
                         .background {
                             if template == .pop {
                                 RoundedRectangle(cornerRadius: 7)
@@ -286,7 +289,7 @@ private struct CalendarPage: View {
                         }
                 }
             }
-            .frame(height: 30)
+            .frame(width: calendarWidth, height: 30)
             .background(template == .gallery ? palette.bar : template == .pop ? palette.popPaper : .white)
             .overlay(alignment: .top) {
                 if template != .pop { palette.main.frame(height: 1.5) }
@@ -464,10 +467,10 @@ private struct CalendarPage: View {
     private var calendarGrid: some View {
         let slots = daySlots()
         let rows = slots.count / 7
-        let spacing: CGFloat = template == .pop ? 4 : 0
-        return VStack(spacing: spacing) {
+        let rowHeight = (405 - calendarSpacing * CGFloat(rows - 1)) / CGFloat(rows)
+        return VStack(spacing: calendarSpacing) {
             ForEach(0..<rows, id: \.self) { row in
-                HStack(spacing: spacing) {
+                HStack(spacing: calendarSpacing) {
                     ForEach(0..<7, id: \.self) { column in
                         let slot = slots[row * 7 + column]
                         VStack(alignment: .center, spacing: 0) {
@@ -476,10 +479,11 @@ private struct CalendarPage: View {
                                 .foregroundStyle(dayColor(slot, column: column))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.75)
+                                .frame(width: columnWidth, alignment: .center)
                                 .padding(.top, template == .pop ? 13 : 10)
                             Spacer(minLength: 0)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .frame(width: columnWidth, height: rowHeight, alignment: .top)
                         .background {
                             if template == .pop {
                                 RoundedRectangle(cornerRadius: 9).fill(popDayBackground(column: column))
@@ -498,7 +502,7 @@ private struct CalendarPage: View {
                 }
             }
         }
-        .frame(height: 405)
+        .frame(width: calendarWidth, height: 405)
         .overlay {
             if template != .pop {
                 GeometryReader { geometry in
