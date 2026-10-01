@@ -37,8 +37,6 @@ struct ImageCropEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var zoom: CGFloat
     @State private var offset: CGSize
-    @State private var dragOrigin: CGSize?
-    @State private var magnifyOrigin: CGFloat?
     @State private var cropFailed = false
 
     private let viewport = CGSize(width: 480, height: 480 * 274 / 377)
@@ -64,7 +62,7 @@ struct ImageCropEditor: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("アイキャッチ画像を編集")
                     .font(.title2.bold())
-                Text("画像をドラッグして位置を調整し、二本指のピンチ操作かスライダーで拡大縮小します。枠内がカレンダーに使用されます。")
+                Text("画像をドラッグするか二本指でスクロールして位置を調整し、ピンチ操作かスライダーで拡大縮小します。枠内がカレンダーに使用されます。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -79,29 +77,21 @@ struct ImageCropEditor: View {
                 .clipped()
                 .overlay(CropGrid().stroke(.white.opacity(0.7), lineWidth: 0.8))
                 .overlay(Rectangle().stroke(.primary.opacity(0.45), lineWidth: 1))
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            if dragOrigin == nil { dragOrigin = offset }
-                            let start = dragOrigin ?? .zero
+                .overlay {
+                    CropInteractionView(
+                        onPan: { delta in
                             offset = CropGeometry.clampedOffset(
-                                CGSize(width: start.width + value.translation.width,
-                                       height: start.height + value.translation.height),
+                                CGSize(width: offset.width + delta.width,
+                                       height: offset.height + delta.height),
                                 imageSize: pixelSize, viewport: viewport, zoom: zoom
                             )
+                        },
+                        onMagnify: { delta in
+                            zoom = min(max(zoom * (1 + delta), 1), 3)
                         }
-                        .onEnded { _ in dragOrigin = nil }
-                )
-                .simultaneousGesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            if magnifyOrigin == nil { magnifyOrigin = zoom }
-                            zoom = min(max((magnifyOrigin ?? zoom) * value.magnification, 1), 3)
-                        }
-                        .onEnded { _ in magnifyOrigin = nil }
-                )
-                .accessibilityLabel("画像の切り抜き範囲。ドラッグして位置を調整")
+                    )
+                }
+                .accessibilityLabel("画像の切り抜き範囲。ドラッグまたは二本指で位置を調整")
 
             HStack {
                 Text("縮小")
@@ -155,6 +145,57 @@ struct ImageCropEditor: View {
         onApply(NSImage(cgImage: cropped, size: NSSize(width: cropped.width, height: cropped.height)),
                 settings)
         dismiss()
+    }
+}
+
+private struct CropInteractionView: NSViewRepresentable {
+    let onPan: (CGSize) -> Void
+    let onMagnify: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> CropInteractionNSView {
+        CropInteractionNSView()
+    }
+
+    func updateNSView(_ view: CropInteractionNSView, context: Context) {
+        view.onPan = onPan
+        view.onMagnify = onMagnify
+    }
+}
+
+private final class CropInteractionNSView: NSView {
+    var onPan: ((CGSize) -> Void)?
+    var onMagnify: ((CGFloat) -> Void)?
+    private var lastDragLocation: NSPoint?
+
+    override var isFlipped: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        lastDragLocation = convert(event.locationInWindow, from: nil)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let location = convert(event.locationInWindow, from: nil)
+        if let lastDragLocation {
+            onPan?(CGSize(width: location.x - lastDragLocation.x,
+                          height: location.y - lastDragLocation.y))
+        }
+        lastDragLocation = location
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        lastDragLocation = nil
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard event.hasPreciseScrollingDeltas else {
+            super.scrollWheel(with: event)
+            return
+        }
+        onPan?(CGSize(width: -event.scrollingDeltaX, height: -event.scrollingDeltaY))
+    }
+
+    override func magnify(with event: NSEvent) {
+        onMagnify?(event.magnification)
     }
 }
 
