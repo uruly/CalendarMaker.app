@@ -382,17 +382,16 @@ private struct CalendarPage: View {
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { column in
                         let slot = slots[row * 7 + column]
-                        VStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .center, spacing: 0) {
                             Text(String(slot.day))
                                 .font(typography.day(17, design: .rounded))
                                 .foregroundStyle(dayColor(slot, column: column))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.75)
                                 .padding(.top, 10)
-                                .padding(.leading, 10)
                             Spacer(minLength: 0)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .background(template == .gallery && (column == 0 || column == 6) ? palette.bar : .white)
                         .overlay(alignment: .bottom) { palette.border.opacity(0.65).frame(height: 0.5) }
                         .overlay(alignment: .trailing) { palette.border.opacity(0.45).frame(width: 0.5) }
