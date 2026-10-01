@@ -38,6 +38,7 @@ struct ImageCropEditor: View {
     @State private var zoom: CGFloat
     @State private var offset: CGSize
     @State private var dragOrigin: CGSize?
+    @State private var magnifyOrigin: CGFloat?
     @State private var cropFailed = false
 
     private let viewport = CGSize(width: 480, height: 480 * 274 / 377)
@@ -63,7 +64,7 @@ struct ImageCropEditor: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("アイキャッチ画像を編集")
                     .font(.title2.bold())
-                Text("画像をドラッグして位置を調整し、スライダーで拡大縮小します。枠内がカレンダーに使用されます。")
+                Text("画像をドラッグして位置を調整し、二本指のピンチ操作かスライダーで拡大縮小します。枠内がカレンダーに使用されます。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -91,6 +92,14 @@ struct ImageCropEditor: View {
                             )
                         }
                         .onEnded { _ in dragOrigin = nil }
+                )
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            if magnifyOrigin == nil { magnifyOrigin = zoom }
+                            zoom = min(max((magnifyOrigin ?? zoom) * value.magnification, 1), 3)
+                        }
+                        .onEnded { _ in magnifyOrigin = nil }
                 )
                 .accessibilityLabel("画像の切り抜き範囲。ドラッグして位置を調整")
 
