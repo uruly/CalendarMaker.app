@@ -89,6 +89,21 @@ private enum TextWeight: String, CaseIterable, Identifiable {
     }
 }
 
+private enum CalendarTemplate: String, CaseIterable, Identifiable {
+    case classic = "クラシック"
+    case gallery = "ギャラリー"
+    case modern = "モダン"
+
+    var id: String { rawValue }
+    var description: String {
+        switch self {
+        case .classic: "小さなカレンダーと写真を並べた標準デザイン"
+        case .gallery: "写真を横いっぱいに使うデザイン"
+        case .modern: "余白と大きな年月を生かしたデザイン"
+        }
+    }
+}
+
 private struct Typography {
     let scale: Double
     let weight: TextWeight
@@ -108,6 +123,7 @@ private struct Typography {
 @MainActor
 private final class EditorModel: ObservableObject {
     @Published var selectedMonth = Month()
+    @Published var template: CalendarTemplate = .classic
     @Published var mainColor = Color(red: 0.35, green: 0.08, blue: 0.75)
     @Published var showLastMonth = true
     @Published var showNextMonth = true
@@ -130,6 +146,7 @@ private final class EditorModel: ObservableObject {
     func printPage() {
         let view = NSHostingView(rootView: CalendarPage(
             month: selectedMonth,
+            template: template,
             firstWeekday: firstWeekday,
             mainColor: mainColor,
             showLastMonth: showLastMonth,
@@ -189,6 +206,7 @@ private struct Palette {
 
 private struct CalendarPage: View {
     let month: Month
+    let template: CalendarTemplate
     let firstWeekday: Int
     let mainColor: Color
     let showLastMonth: Bool
@@ -208,9 +226,9 @@ private struct CalendarPage: View {
                 ForEach(0..<7, id: \.self) { index in
                     Text(weekdays[index])
                         .font(typography.day(10))
-                        .foregroundStyle(palette.main)
+                        .foregroundStyle(template == .modern ? .white : palette.main)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(palette.bar)
+                        .background(template == .modern ? palette.main : palette.bar)
                 }
             }
             .frame(height: 28)
@@ -219,11 +237,22 @@ private struct CalendarPage: View {
         .padding(.horizontal, Layout.margin)
         .padding(.top, 10)
         .frame(width: Layout.page.width, height: Layout.page.height)
-        .background(palette.pageBackground)
+        .background(template == .gallery ? .white : palette.pageBackground)
         .environment(\.colorScheme, .light)
     }
 
     private var topStage: some View {
+        Group {
+            switch template {
+            case .classic: classicTopStage
+            case .gallery: galleryTopStage
+            case .modern: modernTopStage
+            }
+        }
+        .frame(width: Layout.page.width - Layout.margin * 2, height: 370, alignment: .topLeading)
+    }
+
+    private var classicTopStage: some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 16) {
                 if showLastMonth { miniCalendar(month.adding(-1)) }
@@ -233,15 +262,7 @@ private struct CalendarPage: View {
             .frame(width: 165, height: 320, alignment: .top)
             .offset(x: 10, y: 37)
 
-            Group {
-                if let image {
-                    Image(nsImage: image).resizable().scaledToFill()
-                } else {
-                    palette.pale
-                }
-            }
-            .frame(width: 377, height: 274)
-            .clipped()
+            photo(width: 377, height: 274)
             .overlay(Rectangle().stroke(palette.border.opacity(0.45), lineWidth: 0.5))
             .offset(x: 191, y: 54)
 
@@ -263,15 +284,84 @@ private struct CalendarPage: View {
             .background(palette.main, in: RoundedRectangle(cornerRadius: 3))
             .offset(x: 438, y: 0)
         }
-        .frame(width: Layout.page.width - Layout.margin * 2, height: 370, alignment: .topLeading)
+    }
+
+    private var galleryTopStage: some View {
+        ZStack(alignment: .topLeading) {
+            photo(width: 571, height: 235)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(String(month.year))
+                    .font(typography.month(17))
+                Text("\(month.month)月")
+                    .font(typography.month(42))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 19)
+            .frame(width: 190, height: 100, alignment: .leading)
+            .background(palette.main)
+            .offset(x: 18, y: 123)
+
+            HStack(alignment: .top, spacing: 16) {
+                if showLastMonth { miniCalendar(month.adding(-1), height: 108) }
+                if showNextMonth { miniCalendar(month.adding(1), height: 108) }
+            }
+            .frame(width: 571, height: 108)
+            .offset(y: 250)
+        }
+    }
+
+    private var modernTopStage: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(String(month.year))
+                    .font(typography.month(21))
+                Text(String(month.month))
+                    .font(typography.month(70))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Rectangle()
+                    .fill(palette.main)
+                    .frame(height: 4)
+                    .padding(.top, 7)
+            }
+            .foregroundStyle(palette.main)
+            .frame(width: 165, height: 130, alignment: .topLeading)
+            .offset(x: 10, y: 6)
+
+            VStack(spacing: 10) {
+                if showLastMonth { miniCalendar(month.adding(-1), height: 105) }
+                if showNextMonth { miniCalendar(month.adding(1), height: 105) }
+            }
+            .frame(width: 165, height: 220, alignment: .top)
+            .offset(x: 10, y: 140)
+
+            photo(width: 370, height: 335)
+                .offset(x: 201, y: 14)
+        }
+    }
+
+    private func photo(width: CGFloat, height: CGFloat) -> some View {
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else {
+                palette.pale
+            }
+        }
+        .frame(width: width, height: height)
+        .clipped()
     }
 
     private var calendarGrid: some View {
         let slots = daySlots()
         let rows = slots.count / 7
-        return VStack(spacing: 1.5) {
+        let gap: CGFloat = template == .modern ? 0.5 : 1.5
+        return VStack(spacing: gap) {
             ForEach(0..<rows, id: \.self) { row in
-                HStack(spacing: 1.5) {
+                HStack(spacing: gap) {
                     ForEach(0..<7, id: \.self) { column in
                         let slot = slots[row * 7 + column]
                         VStack(spacing: 0) {
@@ -284,7 +374,12 @@ private struct CalendarPage: View {
                             Spacer(minLength: 0)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(.white)
+                        .background(template == .gallery ? palette.pale : .white)
+                        .overlay {
+                            if template == .modern {
+                                Rectangle().stroke(palette.border.opacity(0.4), lineWidth: 0.5)
+                            }
+                        }
                         .accessibilityLabel("\(slot.month.title) \(slot.day)日\(slot.isCurrent ? "" : "（隣月）")")
                     }
                 }
@@ -326,12 +421,13 @@ private struct CalendarPage: View {
         return .black
     }
 
-    private func miniCalendar(_ target: Month) -> some View {
+    private func miniCalendar(_ target: Month, height: CGFloat = 150) -> some View {
         let days = target.days(firstWeekday: firstWeekday)
         let rows = Int(ceil(Double(days.count) / 7))
-        return VStack(alignment: .leading, spacing: 2) {
+        let compact = height < 150
+        return VStack(alignment: .leading, spacing: compact ? 1 : 2) {
             Text("\(target.month)月")
-                .font(typography.month(11))
+                .font(typography.month(compact ? 9 : 11))
                 .foregroundStyle(palette.main)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 0) {
@@ -341,7 +437,7 @@ private struct CalendarPage: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 14)
+            .frame(height: compact ? 10 : 14)
             ForEach(0..<rows, id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { column in
@@ -353,13 +449,13 @@ private struct CalendarPage: View {
                             .minimumScaleFactor(0.8)
                     }
                 }
-                .frame(height: 14)
+                .frame(height: compact ? 10 : 14)
             }
             Spacer(minLength: 0)
         }
-        .font(typography.day(7.5))
-        .padding(8)
-        .frame(width: 165, height: 150)
+        .font(typography.day(compact ? 6.5 : 7.5))
+        .padding(compact ? 6 : 8)
+        .frame(width: 165, height: height)
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 3))
         .overlay(RoundedRectangle(cornerRadius: 3).stroke(palette.border.opacity(0.4), lineWidth: 0.5))
@@ -383,6 +479,16 @@ private struct EditorView: View {
     var body: some View {
         HSplitView {
             Form {
+                Section("テンプレート") {
+                    Picker("デザイン", selection: $model.template) {
+                        ForEach(CalendarTemplate.allCases) { template in
+                            Text(template.rawValue).tag(template)
+                        }
+                    }
+                    Text(model.template.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Section("対象年月") {
                     Picker("年", selection: Binding(
                         get: { model.selectedMonth.year },
@@ -483,6 +589,7 @@ private struct EditorView: View {
                                          (geometry.size.height - 40) / Layout.page.height))
                 CalendarPage(
                     month: model.selectedMonth,
+                    template: model.template,
                     firstWeekday: model.firstWeekday,
                     mainColor: model.mainColor,
                     showLastMonth: model.showLastMonth,
