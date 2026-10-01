@@ -191,7 +191,7 @@ private final class CropInteractionNSView: NSView {
             super.scrollWheel(with: event)
             return
         }
-        onPan?(CGSize(width: -event.scrollingDeltaX, height: -event.scrollingDeltaY))
+        onPan?(CGSize(width: -event.scrollingDeltaX, height: event.scrollingDeltaY))
     }
 
     override func magnify(with event: NSEvent) {
