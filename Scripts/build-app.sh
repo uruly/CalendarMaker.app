@@ -13,6 +13,7 @@ rm -rf "${app_path}"
 mkdir -p "${app_path}/Contents/MacOS" "${app_path}/Contents/Resources"
 cp "${binary_path}/CalendarMaker" "${app_path}/Contents/MacOS/CalendarMaker"
 cp "${binary_path}/CalendarMaker_CalendarMaker.bundle/holidays.csv" "${app_path}/Contents/Resources/holidays.csv"
+swift Scripts/generate-icon.swift "${app_path}/Contents/Resources/AppIcon.icns"
 
 cat > "${app_path}/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -22,6 +23,7 @@ cat > "${app_path}/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>CalendarMaker</string>
   <key>CFBundleIdentifier</key><string>jp.uruly.CalendarMaker</string>
   <key>CFBundleName</key><string>カレンダーメーカー</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
