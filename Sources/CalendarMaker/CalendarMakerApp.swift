@@ -1,4 +1,5 @@
 import AppKit
+import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -162,14 +163,26 @@ private final class EditorModel: ObservableObject {
             typography: typography
         ))
         renderer.proposedSize = ProposedViewSize(Layout.page)
-        renderer.scale = 3
-        guard let pageImage = renderer.nsImage else {
+        let pdfData = NSMutableData()
+        guard let consumer = CGDataConsumer(data: pdfData) else {
             printError = "印刷用の紙面を作成できませんでした。"
             return
         }
-        let view = NSImageView(image: pageImage)
-        view.imageScaling = .scaleAxesIndependently
-        view.frame = CGRect(origin: .zero, size: Layout.page)
+        var mediaBox = CGRect(origin: .zero, size: Layout.page)
+        guard let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+            printError = "印刷用の紙面を作成できませんでした。"
+            return
+        }
+        context.beginPDFPage(nil)
+        renderer.render { _, draw in
+            draw(context)
+        }
+        context.endPDFPage()
+        context.closePDF()
+        guard let document = PDFDocument(data: pdfData as Data), document.pageCount == 1 else {
+            printError = "印刷用の紙面を作成できませんでした。"
+            return
+        }
         let info = NSPrintInfo.shared.copy() as! NSPrintInfo
         info.paperSize = Layout.page
         info.orientation = .portrait
@@ -179,7 +192,10 @@ private final class EditorModel: ObservableObject {
         info.rightMargin = 0
         info.horizontalPagination = .fit
         info.verticalPagination = .fit
-        let operation = NSPrintOperation(view: view, printInfo: info)
+        guard let operation = document.printOperation(for: info, scalingMode: .pageScaleNone, autoRotate: false) else {
+            printError = "印刷ダイアログを開けませんでした。"
+            return
+        }
         operation.jobTitle = "カレンダー \(selectedMonth.title)"
         operation.showsPrintPanel = true
         operation.run()
