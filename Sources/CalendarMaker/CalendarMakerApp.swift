@@ -473,7 +473,12 @@ private struct CalendarPage: View {
                 HStack(spacing: calendarSpacing) {
                     ForEach(0..<7, id: \.self) { column in
                         let slot = slots[row * 7 + column]
-                        VStack(alignment: .center, spacing: 0) {
+                        ZStack(alignment: .top) {
+                            if template == .pop {
+                                RoundedRectangle(cornerRadius: 9).fill(popDayBackground(column: column))
+                            } else {
+                                (template == .gallery && (column == 0 || column == 6) ? palette.bar : .white)
+                            }
                             Text(String(slot.day))
                                 .font(typography.day(template == .pop ? 21 : 17, design: .rounded))
                                 .foregroundStyle(dayColor(slot, column: column))
@@ -481,16 +486,8 @@ private struct CalendarPage: View {
                                 .minimumScaleFactor(0.75)
                                 .frame(width: columnWidth, alignment: .center)
                                 .padding(.top, template == .pop ? 13 : 10)
-                            Spacer(minLength: 0)
                         }
-                        .frame(width: columnWidth, height: rowHeight, alignment: .top)
-                        .background {
-                            if template == .pop {
-                                RoundedRectangle(cornerRadius: 9).fill(popDayBackground(column: column))
-                            } else {
-                                (template == .gallery && (column == 0 || column == 6) ? palette.bar : .white)
-                            }
-                        }
+                        .frame(width: columnWidth, height: rowHeight)
                         .overlay {
                             if template == .pop {
                                 RoundedRectangle(cornerRadius: 9)
