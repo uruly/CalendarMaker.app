@@ -648,11 +648,16 @@ private struct CalendarPage: View {
 }
 
 private struct EditorView: View {
+    private struct ImageEditorSession: Identifiable {
+        let id = UUID()
+        let source: NSImage
+        let settings: CropSettings
+        let template: CalendarTemplate
+    }
+
     @ObservedObject var model: EditorModel
     @State private var choosingImage = false
-    @State private var showingImageEditor = false
-    @State private var editorSource: NSImage?
-    @State private var editorSettings = CropSettings()
+    @State private var imageEditorSession: ImageEditorSession?
     @State private var imageError: String?
 
     var body: some View {
@@ -741,12 +746,15 @@ private struct EditorView: View {
                 }
                 Section("アイキャッチ画像") {
                     Button(model.image == nil ? "画像を選ぶ…" : "画像を変更…") { choosingImage = true }
+                    Button("画像を編集…") {
+                        guard let source = model.originalImage ?? model.image else { return }
+                        let settings = model.cropTemplate == model.template ? model.cropSettings : CropSettings()
+                        imageEditorSession = ImageEditorSession(
+                            source: source, settings: settings, template: model.template
+                        )
+                    }
+                    .disabled(model.image == nil)
                     if model.image != nil {
-                        Button("画像を編集…") {
-                            editorSource = model.originalImage ?? model.image
-                            editorSettings = model.cropTemplate == model.template ? model.cropSettings : CropSettings()
-                            showingImageEditor = true
-                        }
                         Button("画像を削除") {
                             model.image = nil
                             model.originalImage = nil
@@ -794,38 +802,38 @@ private struct EditorView: View {
                     imageError = "画像を読み込めませんでした。"
                     return
                 }
-                editorSource = image
-                editorSettings = CropSettings()
-                DispatchQueue.main.async { showingImageEditor = true }
+                DispatchQueue.main.async {
+                    imageEditorSession = ImageEditorSession(
+                        source: image, settings: CropSettings(), template: model.template
+                    )
+                }
             } catch {
                 imageError = error.localizedDescription
             }
         }
-        .sheet(isPresented: $showingImageEditor) {
-            if let source = editorSource {
-                ImageCropEditor(
-                    source: source,
-                    initial: editorSettings,
-                    photoSize: model.template.photoSize,
-                    templateName: model.template.rawValue,
-                    pagePreview: { cropped in
-                        AnyView(CalendarPage(
-                            month: model.selectedMonth,
-                            template: model.template,
-                            firstWeekday: model.firstWeekday,
-                            mainColor: model.mainColor,
-                            showLastMonth: model.showLastMonth,
-                            showNextMonth: model.showNextMonth,
-                            image: cropped,
-                            typography: model.typography
-                        ))
-                    }
-                ) { cropped, settings in
-                    model.originalImage = source
-                    model.cropSettings = settings
-                    model.cropTemplate = model.template
-                    model.image = cropped
+        .sheet(item: $imageEditorSession) { session in
+            ImageCropEditor(
+                source: session.source,
+                initial: session.settings,
+                photoSize: session.template.photoSize,
+                templateName: session.template.rawValue,
+                pagePreview: { cropped in
+                    AnyView(CalendarPage(
+                        month: model.selectedMonth,
+                        template: session.template,
+                        firstWeekday: model.firstWeekday,
+                        mainColor: model.mainColor,
+                        showLastMonth: model.showLastMonth,
+                        showNextMonth: model.showNextMonth,
+                        image: cropped,
+                        typography: model.typography
+                    ))
                 }
+            ) { cropped, settings in
+                model.originalImage = session.source
+                model.cropSettings = settings
+                model.cropTemplate = session.template
+                model.image = cropped
             }
         }
         .alert("画像エラー", isPresented: Binding(get: { imageError != nil }, set: { if !$0 { imageError = nil } })) {
