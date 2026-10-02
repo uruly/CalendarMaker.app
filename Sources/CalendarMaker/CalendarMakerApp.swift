@@ -97,6 +97,14 @@ private enum CalendarTemplate: String, CaseIterable, Identifiable {
     case pop = "ポップ"
 
     var id: String { rawValue }
+    var photoSize: CGSize {
+        switch self {
+        case .classic: CGSize(width: 361, height: 304)
+        case .gallery: CGSize(width: 555, height: 230)
+        case .modern: CGSize(width: 354, height: 324)
+        case .pop: CGSize(width: 555, height: 286)
+        }
+    }
     var description: String {
         switch self {
         case .classic: "写真と文字を組み合わせた誌面風レイアウト"
@@ -138,6 +146,7 @@ private final class EditorModel: ObservableObject {
     @Published var printError: String?
     var originalImage: NSImage?
     var cropSettings = CropSettings()
+    var cropTemplate: CalendarTemplate?
     @Published var fontScale = 1.2
     @Published var fontWeight: TextWeight = .semibold
     @Published var monthFontFamily = ""
@@ -333,7 +342,7 @@ private struct CalendarPage: View {
             .frame(width: 165, height: 290, alignment: .top)
             .offset(x: 10, y: 41)
 
-            photo(width: 361, height: 304)
+            photo()
                 .offset(x: 194, y: 26)
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -361,7 +370,7 @@ private struct CalendarPage: View {
                 .foregroundStyle(palette.main)
                 .offset(x: 2, y: 5)
 
-            photo(width: 555, height: 230)
+            photo()
                 .offset(y: 24)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -413,14 +422,14 @@ private struct CalendarPage: View {
             .frame(width: 165, height: 215, alignment: .top)
             .offset(x: 10, y: 143)
 
-            photo(width: 354, height: 324)
+            photo()
                 .offset(x: 201, y: 18)
         }
     }
 
     private var popTopStage: some View {
         ZStack(alignment: .topLeading) {
-            photo(width: 555, height: 286)
+            photo()
                 .clipShape(RoundedRectangle(cornerRadius: 18))
 
             VStack(alignment: .leading, spacing: 4) {
@@ -452,7 +461,7 @@ private struct CalendarPage: View {
         }
     }
 
-    private func photo(width: CGFloat, height: CGFloat) -> some View {
+    private func photo() -> some View {
         Group {
             if let image {
                 Image(nsImage: image).resizable().scaledToFill()
@@ -460,7 +469,7 @@ private struct CalendarPage: View {
                 palette.pale
             }
         }
-        .frame(width: width, height: height)
+        .frame(width: template.photoSize.width, height: template.photoSize.height)
         .clipped()
     }
 
@@ -735,13 +744,14 @@ private struct EditorView: View {
                     if model.image != nil {
                         Button("画像を編集…") {
                             editorSource = model.originalImage ?? model.image
-                            editorSettings = model.cropSettings
+                            editorSettings = model.cropTemplate == model.template ? model.cropSettings : CropSettings()
                             showingImageEditor = true
                         }
                         Button("画像を削除") {
                             model.image = nil
                             model.originalImage = nil
                             model.cropSettings = CropSettings()
+                            model.cropTemplate = nil
                         }
                     }
                 }
@@ -793,9 +803,27 @@ private struct EditorView: View {
         }
         .sheet(isPresented: $showingImageEditor) {
             if let source = editorSource {
-                ImageCropEditor(source: source, initial: editorSettings) { cropped, settings in
+                ImageCropEditor(
+                    source: source,
+                    initial: editorSettings,
+                    photoSize: model.template.photoSize,
+                    templateName: model.template.rawValue,
+                    pagePreview: { cropped in
+                        AnyView(CalendarPage(
+                            month: model.selectedMonth,
+                            template: model.template,
+                            firstWeekday: model.firstWeekday,
+                            mainColor: model.mainColor,
+                            showLastMonth: model.showLastMonth,
+                            showNextMonth: model.showNextMonth,
+                            image: cropped,
+                            typography: model.typography
+                        ))
+                    }
+                ) { cropped, settings in
                     model.originalImage = source
                     model.cropSettings = settings
+                    model.cropTemplate = model.template
                     model.image = cropped
                 }
             }

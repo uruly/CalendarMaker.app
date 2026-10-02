@@ -2,6 +2,30 @@ import XCTest
 @testable import CalendarMaker
 
 final class CropGeometryTests: XCTestCase {
+    func testTemplatePhotoViewportsKeepTheirAspectRatios() {
+        let photoSizes = [
+            CGSize(width: 361, height: 304),
+            CGSize(width: 555, height: 230),
+            CGSize(width: 354, height: 324),
+            CGSize(width: 555, height: 286)
+        ]
+        for photoSize in photoSizes {
+            let viewport = CropGeometry.viewport(
+                photoSize: photoSize, fittingWithin: CGSize(width: 480, height: 320)
+            )
+            XCTAssertEqual(viewport.width / viewport.height,
+                           photoSize.width / photoSize.height, accuracy: 0.001)
+            XCTAssertLessThanOrEqual(viewport.width, 480)
+            XCTAssertLessThanOrEqual(viewport.height, 320)
+            let crop = CropGeometry.sourceRect(
+                imageSize: CGSize(width: 1600, height: 1200),
+                viewport: viewport, settings: CropSettings()
+            )
+            XCTAssertEqual(crop.width / crop.height,
+                           photoSize.width / photoSize.height, accuracy: 0.001)
+        }
+    }
+
     func testCenterCropMatchesViewportAspectRatio() {
         let viewport = CGSize(width: 480, height: 480 * 274 / 377)
         let rect = CropGeometry.sourceRect(

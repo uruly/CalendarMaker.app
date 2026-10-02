@@ -7,6 +7,11 @@ struct CropSettings {
 }
 
 enum CropGeometry {
+    static func viewport(photoSize: CGSize, fittingWithin bounds: CGSize) -> CGSize {
+        let scale = min(bounds.width / photoSize.width, bounds.height / photoSize.height)
+        return CGSize(width: photoSize.width * scale, height: photoSize.height * scale)
+    }
+
     static func clampedOffset(_ offset: CGSize, imageSize: CGSize,
                               viewport: CGSize, zoom: CGFloat) -> CGSize {
         let baseScale = max(viewport.width / imageSize.width, viewport.height / imageSize.height)
@@ -42,6 +47,9 @@ enum CropGeometry {
 struct ImageCropEditor: View {
     let source: NSImage
     let initial: CropSettings
+    let photoSize: CGSize
+    let templateName: String
+    let pagePreview: (NSImage?) -> AnyView
     let onApply: (NSImage, CropSettings) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -49,12 +57,20 @@ struct ImageCropEditor: View {
     @State private var offset: CGSize
     @State private var cropFailed = false
 
-    private let viewport = CGSize(width: 480, height: 480 * 274 / 377)
+    private let pageSize = CGSize(width: 595.28, height: 841.89)
+    private let pageScale: CGFloat = 0.45
+    private var viewport: CGSize {
+        CropGeometry.viewport(photoSize: photoSize, fittingWithin: CGSize(width: 480, height: 320))
+    }
 
-    init(source: NSImage, initial: CropSettings,
+    init(source: NSImage, initial: CropSettings, photoSize: CGSize,
+         templateName: String, pagePreview: @escaping (NSImage?) -> AnyView,
          onApply: @escaping (NSImage, CropSettings) -> Void) {
         self.source = source
         self.initial = initial
+        self.photoSize = photoSize
+        self.templateName = templateName
+        self.pagePreview = pagePreview
         self.onApply = onApply
         _zoom = State(initialValue: initial.zoom)
         _offset = State(initialValue: initial.offset)
@@ -72,11 +88,52 @@ struct ImageCropEditor: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("アイキャッチ画像を編集")
                     .font(.title2.bold())
-                Text("画像をドラッグするか二本指でスクロールして位置を調整し、ピンチ操作かスライダーで拡大縮小します。枠内がカレンダーに使用されます。")
+                Text("写真を動かすと、右の\(templateName)の紙面にも反映されます。二本指で移動・拡大縮小できます。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
+            HStack(alignment: .top, spacing: 24) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("写真の切り抜き範囲")
+                        .font(.headline)
+                    cropCanvas
+                        .frame(width: 480, height: 320)
+                    zoomControl
+                }
+                .frame(width: 480)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("印刷イメージ · \(templateName)")
+                        .font(.headline)
+                    pagePreview(croppedImage(settings: CropSettings(zoom: zoom, offset: offset)))
+                        .scaleEffect(pageScale, anchor: .topLeading)
+                        .frame(width: pageSize.width * pageScale,
+                               height: pageSize.height * pageScale,
+                               alignment: .topLeading)
+                        .overlay(Rectangle().stroke(.secondary.opacity(0.35), lineWidth: 1))
+                }
+            }
+
+            HStack {
+                Button("位置と倍率をリセット") {
+                    zoom = 1
+                    offset = .zero
+                }
+                Spacer()
+                Button("キャンセル") { dismiss() }
+                Button("適用") { applyCrop() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 820)
+        .alert("画像を切り抜けませんでした", isPresented: $cropFailed) {
+            Button("OK", role: .cancel) { }
+        }
+    }
+
+    private var cropCanvas: some View {
             Image(nsImage: source)
                 .resizable()
                 .scaledToFill()
@@ -102,7 +159,9 @@ struct ImageCropEditor: View {
                     )
                 }
                 .accessibilityLabel("画像の切り抜き範囲。ドラッグまたは二本指で位置を調整")
+    }
 
+    private var zoomControl: some View {
             HStack {
                 Text("縮小")
                 Slider(value: $zoom, in: 1...3, step: 0.01) {
@@ -119,31 +178,12 @@ struct ImageCropEditor: View {
                     .monospacedDigit()
                     .frame(width: 52, alignment: .trailing)
             }
-
-            HStack {
-                Button("位置と倍率をリセット") {
-                    zoom = 1
-                    offset = .zero
-                }
-                Spacer()
-                Button("キャンセル") { dismiss() }
-                Button("適用") { applyCrop() }
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(24)
-        .frame(width: 560)
-        .alert("画像を切り抜けませんでした", isPresented: $cropFailed) {
-            Button("OK", role: .cancel) { }
-        }
     }
 
-    private func applyCrop() {
+    private func croppedImage(settings: CropSettings) -> NSImage? {
         guard let image = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            cropFailed = true
-            return
+            return nil
         }
-        let settings = CropSettings(zoom: zoom, offset: offset)
         let size = CGSize(width: image.width, height: image.height)
         let rect = CropGeometry.sourceRect(imageSize: size, viewport: viewport, settings: settings)
         let pixelRect = CGRect(x: floor(rect.minX), y: floor(rect.minY),
@@ -151,11 +191,18 @@ struct ImageCropEditor: View {
             .intersection(CGRect(origin: .zero, size: size))
         guard let cropped = image.cropping(to: pixelRect),
               cropped.width > 0, cropped.height > 0 else {
+            return nil
+        }
+        return NSImage(cgImage: cropped, size: NSSize(width: cropped.width, height: cropped.height))
+    }
+
+    private func applyCrop() {
+        let settings = CropSettings(zoom: zoom, offset: offset)
+        guard let cropped = croppedImage(settings: settings) else {
             cropFailed = true
             return
         }
-        onApply(NSImage(cgImage: cropped, size: NSSize(width: cropped.width, height: cropped.height)),
-                settings)
+        onApply(cropped, settings)
         dismiss()
     }
 }
